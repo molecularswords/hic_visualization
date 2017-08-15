@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<title>An experience in effective data visualization</title>
+<style>
+
+.background {
+	fill: #fff;
+}
+
+line {
+	stroke: #fff;
+}
+
+line.active {
+	stroke: red;
+}
+
+#loading {
+    fill: white;
+    text-shadow: 0 0 40px black;
+}
+
+#body_text {
+    font-size: 1.2em;
+    width: 800px;
+}
+
+#figures_container {
+    width: 800px;
+}
+
+text.active {
+	fill: red;
+}
+
+.container{
+    display: flex;
+}
+
+.flex-item{
+    flex-grow: 1;
+}
+
+.button{
+	width: 20px;
+	height: 20px;
+	background-color: #999;
+	text-align: center;
+	cursor: pointer;
+	text-decoration: none;
+	border: 2px solid #000;
+	font-size: 20px;
+	font-weight: bold;
+	line-height:1em;
+}
+
+.tick line {
+  stroke: #000;
+  stroke-width: 2;
+  /*shape-rendering: crispEdges;*/
+  /*stroke-dasharray: 5,5;*/
+}
+
+.x_axis line {
+  stroke: #fff;
+  stroke-width: 2;
+  /*shape-rendering: crispEdges;*/
+  /*stroke-dasharray: 5,5;*/
+}
+
+.y_axis line {
+  stroke: #fff;
+  stroke-width: 2;
+  /*shape-rendering: crispEdges;*/
+  /*stroke-dasharray: 5,5;*/
+}
+
+</style>
+
+<body>
+
+<h3>Hi-C visualization</h3>
+<div id="body_text">Click on an area of the plot for a detailed view of the interactions between two chromosomes for the growth state you wish to see. In the detailed view the range of the scaling can be decreased or increased by mousiing over the plot and scrolling up or down, respectively, or by pressing the appropriate scale buttons. Double click or press the appropriate button to return to the overview.</div>
+<div id="body_text"><b>Performance note:</b> Please use Chrome or Safari for this visualization. Firefox is terribly slow at rendering a large number of SVG elements simultaneously and will thus provide a very bad experience.</div>
+<br>
+
+<div class="container" style="">
+	<div style="float: left; line-height:1.5em; font-size:1.2em;">Growth state:</div>
+	<div style="float: left; width: 10px; height: 20px;"></div>
+	<div style="float: left; line-height:1.5em; font-size:1.2em">
+		<select id="sample" onChange='change_sample()'>
+			<option value="diff">Differential</option>
+			<option value="exp">Exponential growth</option>
+			<option value="qui">Quiescence</option>
+		</select>
+	</div>
+	<div style="float: left; width: 10px; height: 20px;"></div>
+	<div id="loadOverview" style="float: left; line-height:1.5em; font-size:1.2em">
+	    <input name="overviewButton" type="button" value="Back to overview" />
+	</div>
+    <div style="float: left; width: 10px; height: 20px;"></div>
+	<div id="zoomOut" style="float: left; line-height:1.5em; font-size:1.2em;">
+	    <input name="zoomOut" type="button" value="Increase range" />
+	</div>
+	<div style="float: left; width: 10px; height: 20px;"></div>
+	<div id="zoomIn" style="float: left; line-height:1.5em; font-size:1.2em;">
+	    <input name="zoomIn" type="button" value="Decrease range" />
+	</div>
+</div>
+
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+
+image_size = Math.min(window.innerHeight, window.innerWidth);
+
+var dropbox_urls = ['https://dl.dropboxusercontent.com/s/55t5kx8dax690vi/hic_chrXV_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/psx7ls28cgoje85/hic_chrXVI_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/lwkw16vsb7ik58z/hic_chrXVI_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/ri5apbuxxxcglpt/hic_chrXV_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/vg7h64jmmwhkgcq/hic_chrVIII_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/54s7pszpm6nkmmb/hic_chrXIV_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/2vqeq025z8qfxfo/hic_chrV_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/cscwvea7f4kp60j/hic_chrIII_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/7joi80hi2weffeu/hic_chrIX_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/904ofxq0b95fv0j/hic_chrIV_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/itubv9x74nxiznx/hic_chrXII_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/2o3xiji10m2fbj4/hic_chrI_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/9k6c9sg512z7gc5/hic_chrXIV_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/kkuxp06adxxsl5m/hic_chrI_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/zos2788nhknaqsr/hic_chrXI_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/eue9sbze5qjnion/hic_chrIX_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/jjzsdgol3t0xms9/hic_chrIV_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/qgagad9hh5rdoz3/hic_chrII_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/w24anggh1vltfb6/hic_chrVIII_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/nar7ulwsii7s96o/hic_chrVI_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/d8tdhtm58ez5g9k/hic_chrII_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/q5ztyz96q146buh/hic_chrI_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/dqzflnw9bie4ef6/hic_chrVI_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/4d3wbsk7xz5reus/hic_chrVI_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/9y1civxic9ulvcc/hic_chrXV_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/2vaho43fbncpmfo/hic_chrXV_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/4omwq7untejdpf3/hic_chrVI_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/41jnq5hut3scstk/hic_chrXVI_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/y8603t76ywr2nal/hic_chrII_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/6ge1s300dyvbb3z/hic_chrXI_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/eu55wo5i8493ko3/hic_chrX_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/ycfdho3vulbc1q2/hic_chrXI_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/0wwj7q0sktej7yr/hic_chrXV_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/bqbt969sqtxcvst/hic_chrIV_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/wc2g938p7gajcmx/hic_chrXVI_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/jzd9mi79d5u8aii/hic_chrIII_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/yf5ngvrg1p5sthj/hic_chrVII_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/0qtcfselb7qkcnv/hic_chrVII_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/q1qckhhvbslh99n/hic_chrXIII_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/fgorg4t86er8e38/hic_chrII_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/uasjqdr0eqogaac/hic_chrX_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/0r857h2a5pyl0ak/hic_chrX_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/k7x7cy7mczduf99/hic_chrVI_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/wwipdjftk7jt4zf/hic_chrXI_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/gii0uic7bcyxbjc/hic_chrIV_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/1vw8atid9y0s9tg/hic_chrIII_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/d962cb193tqpdya/hic_chrXI_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/ng1qnrj0tl5tfry/hic_chrV_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/tys6kc521u6ozl6/hic_chrIX_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/hpbr1sncfafj9p7/hic_chrX_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/xuq7phuvu7z10hh/hic_chrIII_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/je1zomrox5v1st3/hic_chrXII_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/sjo33oazn2elcz4/hic_chrIX_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/k6itvl87mbz709d/hic_chrII_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/u8vu8510qj009jg/hic_chrIV_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/7zecyh7uqdlqd6w/hic_chrXIII_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/zmhkwynbpzrzxiy/hic_chrIII_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/oiscczuuzc5tu8x/hic_chrIII_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/6nsuulfw1zpjun7/hic_chrXV_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/cxyxcu69kikb87m/hic_chrXVI_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/0hbpiize8j9qys8/hic_chrII_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/4l64yivn8dcaptd/hic_chrI_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/auz4nktp107bdw0/hic_chrVI_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/ml7okhextlvpo3e/hic_chrII_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/bj8ig0472q793ic/hic_chrXVI_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/56jxw6mrv42n69b/hic_chrXIV_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/akjh2gc00jm7f1j/hic_chrVIII_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/o8uxht4rf606ocf/hic_chrVII_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/5gtzl4q1eogzbtg/hic_chrV_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/y10mqrp4tkaspnw/hic_chrIV_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/yjmdtj7njmb4yw2/hic_chrXV_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/4228hs8rtq3nrga/hic_chrX_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/85ssfk8xoy9z3e8/hic_chrIX_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/qdorkyh3tluhdts/hic_chrXV_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/dh2gauwut9dllqu/hic_chrXIII_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/19l7y67px9pzlf1/hic_chrIII_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/bde13ayeg7ohtco/hic_chrI_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/e2btluz2v4vu5m9/hic_chrXIII_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/oq38vtt0rxoecys/hic_chrXIII_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/9wsmobxd7nkh1s5/hic_chrVI_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/tfbe6pwzhw5vps9/hic_chrVII_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/y5ktqavipj0saf7/hic_chrXIV_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/q70ruou6mn1h74e/hic_chrVIII_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/hmz7d2e0hybuh06/hic_chrIV_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/sag4h85sx03lgmh/hic_chrVII_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/8k4dttd3kle4bzk/hic_chrI_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/lo5u1qkirhajfy1/hic_chrXI_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/zo03yurwmmb3x7v/hic_chrXI_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/oqdo12a7lazh61y/hic_chrIX_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/kbaru6a4fp8ajsr/hic_chrV_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/jpx9tr3072xehjn/hic_chrXV_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/vu2bug39um5jooh/hic_chrXVI_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/0kpes9muk1slyql/hic_chrIII_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/mc3n8r6tclbzibn/hic_chrXII_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/ho867zjotzonmsw/hic_chrXI_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/8ejch0cdn8j3iuh/hic_chrVIII_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/i848y9jtaxlc1tx/hic_chrXIII_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/3mywrt87weft83n/hic_chrXII_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/siwqr6i25g4rv5y/hic_chrIII_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/2oibxium7m8ae9w/hic_chrIX_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/uno4naeikfnegye/hic_chrVII_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/vdwprs7izbjx4qa/hic_chrXI_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/lbm01jei596lwyu/hic_chrIV_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/vydpjb90bafvq8x/hic_chrIV_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/0vv5xps9s2ycn84/hic_chrIX_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/6qk58cjyz0uf2v7/hic_chrIX_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/tj0ex44cuzx8m1l/hic_chrIX_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/02a6sn8vcygdlvw/hic_chrX_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/av4bmw9cweno31n/hic_chrXI_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/j9b9ldd0tbuzjfa/hic_chrXI_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/tflsv5toz4apzii/hic_chrIX_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/me814jtobcgdt5b/hic_chrVI_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/ij5ip9xhs0ukoe0/hic_chrIV_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/mysv0iq4fsn6n9m/hic_chrII_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/bkrfd27yd4x32v6/hic_chrVII_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/vi531skz9aklwmg/hic_chrXII_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/epw3w0fjkc023h6/hic_chrXI_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/0xxuuapoyotv88c/hic_chrIX_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/vor3efyfoajeg3q/hic_chrIII_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/l8s2ykbbiljbds2/hic_chrX_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/5gl92vi24vj2hl4/hic_chrIX_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/gyf2qf686he5ruc/hic_chrXI_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/51bdl3oguvml390/hic_chrXI_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/wpiquz4dyfhlnc4/hic_chrX_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/jo00vm9wflbzev2/hic_chrXII_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/lxtacdt7sfvvd0u/hic_chrVII_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/vqz1391bjys5k2d/hic_chrXII_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/5nk2u4omh5bqpai/hic_chrX_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/iqn5w997bhcp0w3/hic_chrI_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/8nxhbuvg46vslyf/hic_chrIV_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/yl81ypdr9qziljp/hic_chrXVI_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/0rouktqtt86wr6u/hic_chrXV_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/tgnl34qakzdifrn/hic_chrXI_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/c660k74dnm6kn02/hic_chrXII_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/ely7nlqrtqwyz4c/hic_chrVII_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/j2mfhts3rtbcrfo/hic_chrII_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/5mcgpzn98t5hmbi/hic_chrX_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/7dp6v00vu4dyzwy/hic_chrXIV_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/jg3gtvu5u9j0z5p/hic_chrIII_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/fw5shdkmc47x1z3/hic_chrII_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/mkeamg8h3r1s1sb/hic_chrVIII_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/vltguhez5u43xeh/hic_chrX_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/nzwy68ukbd9vm46/hic_chrIII_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/b2i9l9hfklz5ber/hic_chrXIII_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/12m8omqgg680nd2/hic_chrXIV_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/z8pix2qq6ibllkk/hic_chrX_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/w2xkwsbjmgci85s/hic_chrXVI_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/928a2ty9ge0nyj9/hic_chrXVI_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/mn5yi45zu9wfzvh/hic_chrXI_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/186j40xybzjgh5p/hic_chrV_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/j19xvg6c8oen9n5/hic_chrV_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/jzo11v4u7qxa0ry/hic_chrVI_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/ssszi6q47dsfoy9/hic_chrVII_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/ltldtmyrrdakkpm/hic_chrII_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/yonf9a4xbcec5sk/hic_chrIX_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/f7dkn86oza4tm73/hic_chrVI_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/oe864qt4qt5cb8g/hic_chrXI_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/89ydcfwdcr8x80l/hic_chrIII_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/gwrot4fbvax0z4s/hic_chrXV_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/emzrwwygjtq50qw/hic_chrXV_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/1wgsn54dqzrwrzi/hic_chrV_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/kyhrpprr4kyqvb0/hic_chrVI_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/e4vfseq5ypcbijy/hic_chrXII_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/2xkuu1l6f2pp0xx/hic_chrXII_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/dir28wi36yjqwu9/hic_chrX_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/uqdxj2yc69z4rzy/hic_chrVI_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/gjffseilbv9hnhk/hic_chrVIII_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/o7jle362no961kd/hic_chrI_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/n60uo7xjq01x0k0/hic_chrVII_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/emv3hqv7z0m8ahl/hic_chrVI_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/l49pe2f8mq48m9e/hic_chrX_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/68xfa8ne8afc87p/hic_chrXI_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/km21vy3841h9yau/hic_chrIX_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/h3hzz337jr56n8c/hic_chrX_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/m8qbh5raipascvm/hic_chrXI_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/sk6hesdmjd5acto/hic_chrVI_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/alzud53dv6lr2gf/hic_chrVIII_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/5mjhb4040g1dkbe/hic_chrIX_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/0ml90r0mrc87qfp/hic_chrIII_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/7he0bbijmfqtqto/hic_chrXIII_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/xt8kc3ollsanwbm/hic_chrXVI_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/87dauf7jtzfp4u0/hic_chrXVI_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/9qox1niue8vsy47/hic_chrVII_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/s3x2ghnpdbmjf51/hic_chrXIII_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/tfx1katc7fcyxtw/hic_chrIV_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/epcsopdz6eafp4i/hic_chrXII_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/t3229n0yyvse49q/hic_chrXIV_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/6ex6s2j7oo1p3mt/hic_chrIII_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/esoqqg827wsboek/hic_chrXV_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/74tqd10gqjgaudo/hic_chrI_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/qjytamgufe4csxv/hic_chrXVI_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/tnuoz91sq3lo8i6/hic_chrVIII_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/jnedyp0otrx9uk9/hic_chrIII_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/f68dgjq9yh0k5ll/hic_chrVII_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/pe7enpft2we1cxl/hic_chrVIII_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/zl8h7tnp4dnzscf/hic_chrXII_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/cgiksymqwn227lf/hic_chrIII_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/sqqcheaaqbva05m/hic_chrXVI_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/j7zrevjp6j9b6np/hic_chrIV_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/vxqd8wv8mjrtjij/hic_chrXII_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/rr3dos6vt4nqmmt/hic_chrI_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/1uj3jf5jpmneinr/hic_chrXIII_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/26128a4bckgk8mh/hic_chrVIII_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/iu3nr1b9swv33tb/hic_chrXIII_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/iqs963rwdzwhnv6/hic_chrXII_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/fk1qzej15n8n0nk/hic_chrXV_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/e45pivixupt6a22/hic_chrVII_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/nbj4iuu18d4p40d/hic_chrVI_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/vjtid7tyhpkgtwp/hic_chrX_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/4qf0rx4beijodfq/hic_chrXI_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/of4u602fmi00nax/hic_chrXII_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/yxbo3lrrjh734t7/hic_chrIV_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/r5wd4hx27zb67uo/hic_chrXV_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/i2tzxt581m6f82m/hic_chrIV_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/ajroxyzcp069g90/hic_chrXIV_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/qd1r0559vv29209/hic_chrXII_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/ulm8m1rshrtb4de/hic_chrV_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/r1i2l3dt5ke751l/hic_chrVIII_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/z9a5e2zxehwbsm4/hic_chrXIV_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/b5gtbpfj7s1nvnm/hic_chrIV_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/sfp4i8cxgnbz57a/hic_chrXVI_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/n9m29k5c2qt0plb/hic_chrI_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/n2it34v8978kwlw/hic_chrII_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/1tu3qc6giehoddc/hic_chrI_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/guxwmztpffar78w/hic_chrXV_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/m1uqcf1k6wwgfcl/hic_chrXV_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/rz2bmutscimnaw2/hic_chrXV_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/iqhmvc59vs1saej/hic_chrI_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/5tfbupoa5p28eow/hic_chrX_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/b8eadlftqs9vcnf/hic_chrXIII_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/0lcegds4zl7mimz/hic_chrXIII_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/h63ppl6aq778us8/hic_chrIV_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/18zdfrsv6dtomf6/hic_chrX_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/du8840nbgtwui2k/hic_chrVI_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/mm4rt7fr48xaes3/hic_chrIII_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/lkzlxny0g0gmge7/hic_chrXV_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/m4lpc2l5mp6jzsm/hic_chrII_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/mylloy60tvny9lu/hic_chrVIII_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/k8kkmsmgtkhudue/hic_chrXII_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/emksym40s58npje/hic_chrXI_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/lzmar20pc9yk9d3/hic_chrVI_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/py8d9rnamakjgz7/hic_chrV_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/o5ip7uh0584j6n5/hic_chrXI_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/bmtdoaizh8zbz7g/hic_chrIV_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/fbceng5hhsb1175/hic_chrXIII_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/h23xg55ihytisil/hic_chrVIII_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/m3wambetpqj0q6t/hic_chrVIII_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/onepfogdjw57z5e/hic_chrXIII_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/k6asxcweirkmmni/hic_chrV_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/5bifav705c27s3i/hic_chrXII_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/db23w0d2slilrfb/hic_chrXI_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/sjoj6my9wj3bxx0/hic_chrII_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/i2wzoluo4xbaxvs/hic_chrII_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/ymbo6tfg980pr3f/hic_chrXIII_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/c9boepjodariprl/hic_chrV_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/dvnb036pnzw0d85/hic_chrVI_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/sfcbqohk471ct0w/hic_chrXV_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/7zex8xf3ibugn4m/hic_chrXII_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/acuvsg8acvk8k8m/hic_chrI_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/bj5ca7rw6o1c7s6/hic_chrX_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/tavyib0m5f4aqep/hic_chrXIV_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/nolh7vcbajfayz7/hic_chrIX_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/4742qqnmodqhql4/hic_chrVI_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/rmdi5r28v366kpx/hic_chrVII_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/y0yg4h6kpmn51fm/hic_chrVI_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/kgb37zx87chwvhb/hic_chrXI_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/bznqh64xw0jz099/hic_chrXII_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/dg3a1cq15zi979j/hic_chrXIII_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/xwaizldl7hvjrpi/hic_chrIX_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/sjltglljkhlx4c3/hic_chrIX_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/epkdn3vsrdm98si/hic_chrXI_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/hhctjx8pwwxrfjr/hic_chrVII_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/u29sg93zeviwk2x/hic_chrVII_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/xjqjqb3cnszz32v/hic_chrIX_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/ec8h72iap1z9utz/hic_chrXIV_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/85siezt2ro43d6w/hic_chrI_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/07uleqlxcy7ttt3/hic_chrXVI_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/0fzixus0lh91tay/hic_chrVII_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/1ef88roed0rtao3/hic_chrX_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/8wpfnx6uvehl99c/hic_chrVI_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/7gvcccvdayxlvni/hic_chrVI_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/1dg211xixg2horn/hic_chrVIII_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/mxkzfgrgmcrudif/hic_chrXV_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/8im8wci41by3fqs/hic_chrV_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/8w1a2pohrp5nlbl/hic_chrII_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/dacdx3x9ui302ig/hic_chrIX_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/bs752vtjbv2yxrm/hic_chrIX_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/vsl19fk9bhjrvi0/hic_chrXI_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/yt80rgwwxa66ite/hic_chrXIII_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/0jnp9de2m6554v9/hic_chrXI_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/sgz5k2cctggw0sr/hic_chrXVI_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/i79x4ppy0e26bgf/hic_chrVII_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/2asw9yjjgft40t4/hic_chrIV_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/3uboo7zgv1w8mc8/hic_chrV_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/fgrq8olqq3kjihw/hic_chrIX_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/h6zs5lyyvrfrc1h/hic_chrXV_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/ugdfn71yt441rwf/hic_chrXVI_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/n5jer0evlql4lxg/hic_chrIII_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/8noumd7jgdutkwp/hic_chrXII_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/lp648urxko9sk2r/hic_chrIII_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/0c20oa5lfjbepb5/hic_chrIX_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/djzn7v96p3a77bm/hic_chrIV_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/to4vt0r30mfdsco/hic_chrXIV_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/gyrfolt1qgt1lyb/hic_chrII_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/zbnqdu9dw4oqsmc/hic_chrXI_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/ei9ci9a0n0b2g3z/hic_chrVIII_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/9eq6ivg6gaq3ivw/hic_chrIII_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/go43f2z1c0sfc3z/hic_chrXI_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/i9v32zv9ufzs3rx/hic_chrVIII_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/mbkdf1lklp3pwqb/hic_chrIV_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/57lg3ow4uguehao/hic_chrXIV_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/p1n7bsgm440qv7k/hic_chrIX_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/8d8a51jsesr0b6m/hic_chrVI_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/hrhayigtatlotui/hic_chrXV_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/dkd1qc7j0sj9rz9/hic_chrV_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/wd9suoz8ddojhqv/hic_chrXI_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/8y9fq82xbb4wp3x/hic_chrVII_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/z1qrgeyvrodouxm/hic_chrXII_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/kg9q0r4ijbprgj2/hic_chrX_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/pt8ssgoiypw9ip4/hic_chrVI_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/tfoqlkpi4kfudcp/hic_chrXI_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/ftwil4g2hsmygtf/hic_chrIX_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/0j30t9xmhe9g5mw/hic_chrIII_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/56i7gc98gqyp7ka/hic_chrXIII_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/ye9omq689cr0do2/hic_chrIX_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/bpquqkeh8flifx3/hic_chrII_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/6mr2swm6mog5v87/hic_chrXIV_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/sxfj2smaymzkjp4/hic_chrII_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/ms5d4zaa0rj0n95/hic_chrXII_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/hvk70gtjplu73u9/hic_chrII_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/d3huhcea7aq9l2r/hic_chrXIV_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/7gljv006ierr7aa/hic_chrXI_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/aulmtk7z4y2vpue/hic_chrIX_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/ilz3uc00ezan6bv/hic_chrVI_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/409owzkotl9ntxr/hic_chrXVI_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/zvl945lhln2o44m/hic_chrVI_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/4nhvwxle3qqzu9m/hic_chrXIV_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/0mr7az1epp6wxj3/hic_chrXIII_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/y97cgke0tse2w8p/hic_chrIX_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/ck3rn7r8enjnnwp/hic_chrX_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/7lbepv4c7rlhciw/hic_chrIV_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/g5j7h994rkpwoof/hic_chrXVI_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/6k3ulizcxf48dbo/hic_chrXIII_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/0pnzbooop81x6f5/hic_chrXI_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/x4jvfqdvhfwvds8/hic_chrIII_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/2k9sssp4h3kufow/hic_chrX_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/tjnx2trpv0ljvob/hic_chrXI_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/jowbt5acryb9wuu/hic_chrXIII_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/rx8lnrltem4ud30/hic_chrXV_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/n281ldrmgpt8kwo/hic_chrIV_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/16cs9tsaz1d7qkw/hic_chrVIII_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/s8mpiwn4011nz9s/hic_chrXV_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/6emlqn0ui48pwxi/hic_chrXII_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/frtdo2o6f2565wy/hic_chrXVI_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/9kc1vvrkw2f7dxf/hic_chrIII_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/o17ndg6zy5pkiwd/hic_chrVI_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/7e41j6mvfg27gz8/hic_chrXIV_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/o9q7tb8u2d0splf/hic_chrXVI_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/kr1dhumykzd4fjc/hic_chrI_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/hfmwzgwcbn8tov5/hic_chrVIII_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/jccfx9wxpxalpw8/hic_chrVI_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/fwcqqxn94gxn4r8/hic_chrIV_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/lzdh9wdy1v32c9u/hic_chrVIII_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/wqq59hsvsxztz4q/hic_chrXVI_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/51ahxi2j332d6bi/hic_chrX_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/kgzn83j3tbvlp1h/hic_chrXII_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/9jdr9qh7gprs5fe/hic_chrIX_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/uj9xebvuqg6j75w/hic_chrIII_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/kr9emuvabgymjfj/hic_chrIX_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/678rhv3iurv59ad/hic_chrVII_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/uk2mzawyyzki1gn/hic_chrVIII_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/y3xpr32b9fifdva/hic_chrXI_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/rjotpasamb2939a/hic_chrVII_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/1z3lo75zo45jbij/hic_chrXII_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/hkh1ixjpla4n9ia/hic_chrI_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/my89zy6be6l5bar/hic_chrVI_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/nh6x6bxhs8d2kmw/hic_chrXIV_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/uv3oc0ttqqacryf/hic_chrI_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/w8f3rv9a51mbkzr/hic_chrI_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/lh9qxxhele9fxqx/hic_chrXI_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/gzh6ik3by45j9jv/hic_chrIII_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/46ld4ne6vhz3gl2/hic_chrI_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/be0ljp1iors104x/hic_chrII_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/7hsekn7i2t62j78/hic_chrII_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/17rz65b18pfbtfn/hic_chrXVI_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/6n9yxabilh3imju/hic_chrIX_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/ch9pa61cvqcgb3p/hic_chrXV_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/anme7tvdt5mou7f/hic_chrIV_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/m7c0gw5ja1bqt5o/hic_chrI_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/y8th6v38dmoqxkc/hic_chrXVI_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/h6lyjogu3ath0s8/hic_chrVIII_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/s5mpx8n0qmwj1l1/hic_chrVII_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/kc8nq73gdzfdx4w/hic_chrV_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/kep3ysb93n3kf2j/hic_chrVI_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/24kk7qny9xetcmz/hic_chrII_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/azcaxduv3qwfjj7/hic_chrVII_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/lm0uqbh0x7mr5fh/hic_chrXIV_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/y21a5n6digsfbgx/hic_chrIII_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/hx4hutzbfu1806c/hic_chrIX_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/egzpd5vh7tdiomj/hic_chrI_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/ljfjukgt96me202/hic_chrXV_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/dmbblxvsnzdu93o/hic_chrV_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/uz0t4pnvhnsu0bu/hic_chrXIV_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/920igkbzx4jivo2/hic_chrXIV_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/xz1kzuzkn1p29zf/hic_chrXIV_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/qcoyehjpacxjorr/hic_chrV_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/c5bo37yzp8xk8fk/hic_chrIX_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/4m7ww9ng3z1dwuj/hic_chrII_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/540zn34hkxnq9ga/hic_chrXV_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/n81mbar2nsqy6qw/hic_chrX_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/0kahaxnmmtl4v72/hic_chrIII_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/fmvnake30n59itx/hic_chrX_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/xm0o0skwyuqhkge/hic_chrIII_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/r7vbz4n0ix8uhsb/hic_chrXV_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/ijk83tbd42aquzt/hic_chrV_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/8wm2f2bzn9lmf2o/hic_chrVIII_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/dvfhahdzu0ozzd8/hic_chrIII_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/jibpo3e8wwdb0gi/hic_chrXI_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/f5xtmooh6bobuwr/hic_chrII_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/uyip794oy1mmwfk/hic_chrXIV_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/lzdecr21jxb7ojz/hic_chrXI_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/8if6teutufu1ua4/hic_chrVII_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/kd35edjxvv3x0ic/hic_chrV_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/k45hd9rwnkf6xzj/hic_chrVI_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/rj5g9kkoe6g8wbd/hic_chrI_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/1byhwxv31d881n4/hic_chrX_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/lw9e3o4du4wgmwe/hic_chrI_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/glold9szpc2ywaf/hic_chrXIV_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/ph3vqen5ibaxcv7/hic_chrIII_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/701vyj1wx9zes65/hic_chrII_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/e43xvkd9d37beo6/hic_chrI_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/kwrjtxnwwfdjh47/hic_chrX_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/dgsegb26qgibeym/hic_chrII_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/wfkiems2k8gdu7i/hic_chrVIII_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/60i2nnftlo0w1v2/hic_chrIV_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/p75v00fp1i9ad4u/hic_chrXV_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/09ndjl7zrvlos3i/hic_chrXV_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/lmjfwpbdhxylihz/hic_chrIX_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/cj6k7ffn7ry9o64/hic_chrXV_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/ls27liozg32s7px/hic_chrXIII_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/k5hs9n6hf9xbtbr/hic_chrXIII_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/orlb1tsnmz159y2/hic_chrII_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/rkjifve3u1196kv/hic_chrVI_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/mqj1v4s1cbclxna/hic_chrVIII_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/057tkluog5psknc/hic_chrIX_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/4ki82nhu9cyftkb/hic_chrV_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/unet6t8d02ry51j/hic_chrX_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/ifgh8twi7u3me01/hic_chrII_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/w0erxscapfvip5k/hic_chrXIII_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/i8k3cp9ss315ble/hic_chrXIII_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/jx6c6w4k9h3xqvn/hic_chrIII_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/51thnejs1bvxefu/hic_chrXIII_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/w51v47t46it9wjd/hic_chrXIV_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/hm2ktcxy0lzoaf9/hic_chrXV_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/rl99a8aajlhntte/hic_chrIV_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/qjonqf8gxt5m2nj/hic_chrV_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/u8f4il0j3wrbk0l/hic_chrXVI_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/ist2jkl0t7d1g9o/hic_chrII_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/wks2c38hq5hzj82/hic_chrXIII_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/q5gjl0n4fz2wl2j/hic_chrX_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/46ygant1xubvtay/hic_chrII_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/exywc9bi2s2onpi/hic_chrII_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/x5m84hzyl5c152v/hic_chrV_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/qpdatn7qiz9nv0y/hic_chrIV_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/iodsbspaeaqseru/hic_chrII_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/qjfl4h4ihf1bfpl/hic_chrI_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/2ahm7mh4ll7c9eq/hic_chrIV_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/3ffm1z2c149ybxu/hic_chrVII_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/q4n4qnmf144cit7/hic_chrVI_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/73gcog4brfcvmyv/hic_chrXIV_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/djjc04t8tl6ykxz/hic_chrIV_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/frj2wr7gzzdpu63/hic_chrXIV_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/55i4ng27u6xt9sa/hic_chrVIII_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/wqpgccr9e9bbizc/hic_chrXIV_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/vgor0dd1o0fehlz/hic_chrX_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/ydhmv2won48jmt1/hic_chrIII_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/ub858hhnnqfr2pc/hic_chrXV_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/sutfi8ke003s7qm/hic_chrX_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/oprkhbbx1i3yl7e/hic_chrIV_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/b696zbyorai6cel/hic_chrX_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/wiss1lixue0mmo6/hic_chrXVI_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/yr54ld67mfd7yx2/hic_chrIV_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/nyphssww4gvzjmc/hic_chrV_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/b3niq9cx6r8ai1s/hic_chrIV_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/hpyxs8cxd1u7g5p/hic_chrI_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/yb8x2pvk0xkgz18/hic_chrVIII_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/vw6g04olbgxgi1w/hic_chrVII_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/fz03z4em9vjiust/hic_chrXI_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/1s7udyp8gprvovx/hic_chrVI_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/n9q399fku657rc5/hic_chrXII_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/e0fjq4ml27dtcxy/hic_chrXVI_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/9hxcdt6l1wzr89e/hic_chrX_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/go4yi2m8zhz9k25/hic_chrXV_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/uw2ysi5fcnjzx0r/hic_chrVIII_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/710vsq9qgjmyp7q/hic_chrIX_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/m116mf58kxzcc0s/hic_chrVII_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/8n0wk6j8f8d1n1w/hic_chrI_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/ihc4z3rxikutfng/hic_chrXI_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/o0due3u1vkco8j9/hic_chrXI_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/jlzy550fiasjx5d/hic_chrXVI_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/649vtrj8trrcv1v/hic_chrX_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/xb1w1hbemqk2nhy/hic_chrVII_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/3n49ely8k7jrqe9/hic_chrXIII_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/1r1ltt0zc0ipm3l/hic_chrIII_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/ontu7bozyriwmuo/hic_chrIX_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/0k8jxlk91jdmjgf/hic_chrI_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/ztzosmen0cjzira/hic_chrVIII_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/fpgqistia6u3hlz/hic_chrXII_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/yhfkhqq6sm0w09o/hic_chrIX_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/sq0rsi6ea342ss5/hic_chrVI_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/cseovowiex3mhbc/hic_chrVIII_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/1bldchswmxt1hqm/hic_chrXVI_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/6zj3zzrk6d79znr/hic_chrXIII_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/a10hio9ezbqp3zp/hic_chrIV_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/x22hijll5lvcm0j/hic_chrXVI_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/d2xbd0lfxtqsj5v/hic_chrXII_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/gv7jons1ym3ji20/hic_chrVII_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/ugo5jv3moisqj48/hic_chrI_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/8tcjnljg4dxmgb0/hic_chrXIV_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/nw7jpbvlqcb65ci/hic_chrXVI_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/swxjsrgl7xjqusm/hic_chrXII_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/djcbz1dkmlw51sk/hic_chrXV_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/cr09abxajgr4epl/hic_chrXIV_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/lo0f67jasxqee1s/hic_chrVII_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/bz9q2p49neiy6gj/hic_chrXIII_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/yvamqad6r6kqdzy/hic_chrXIII_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/3ejrotxt33j8oem/hic_chrVIII_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/af3gncrakqua76z/hic_chrVII_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/4vldbc24ob2kynn/hic_chrXIV_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/m84u2ip70kzdhb4/hic_chrXIV_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/7xu52hm4vec19f6/hic_chrIII_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/r4chd4y85lgh1i8/hic_chrII_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/zw8du8da9kk97f3/hic_chrXII_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/70ljpz4xbof1rg4/hic_chrXVI_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/ucq6zupbi5gc558/hic_chrXIII_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/opq5fablndmwlgt/hic_chrVI_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/vh20mzv0q2r0ou3/hic_chrXIII_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/0116zyt3rfv4l3x/hic_chrI_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/7rqlcl05uwv4z5k/hic_chrV_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/78ekwh9n88jihns/hic_chrXII_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/edqmww140e2hqib/hic_chrVII_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/mmprfkwarggnmpl/hic_chrXVI_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/woht0pabj9hld51/hic_chrVII_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/xk0w2egu5x8vwh5/hic_chrVI_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/iw7032sff1973i1/hic_chrIV_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/hs0uwt7bondz9hr/hic_chrI_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/besr89p5zgtxoeu/hic_chrXIII_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/jsyqu8xize0j4w6/hic_chrII_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/81c7wnhqmmxgl7w/hic_chrV_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/aoq8r0ts9apca6k/hic_chrVIII_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/8szevv3lz75hthe/hic_chrX_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/lp0ld8jdatulspv/hic_chrIII_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/a2ofxs1ty12pjot/hic_chrXI_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/q1cphir0pfsktws/hic_chrXIV_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/2yx34af0e49tfug/hic_chrI_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/u8lpckbjal5atac/hic_chrX_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/70w13x6p817yy15/hic_chrV_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/tgb5h4y55wklvcm/hic_chrV_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/bh9rw1zcbtwfak0/hic_chrXIV_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/cvwy3v4fvs07t7p/hic_chrVII_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/8jq9jq23rrq99uv/hic_chrV_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/c7sw8r50hlli2xz/hic_chrX_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/eceuh2wgl0dym1n/hic_chrXV_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/erytt5096h62ods/hic_chrVIII_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/o8d5lyodfftwpec/hic_chrXV_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/xb9bmsjpafksl4y/hic_chrIX_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/kusd7fi4h808id1/hic_chrVIII_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/i7jocy9nk635vid/hic_chrIV_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/09opvwti262n462/hic_chrVII_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/z33kurwh9qlyp7b/hic_chrXI_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/mv802znc1tv4gdl/hic_chrVIII_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/yptb35db6m2rl4c/hic_chrIV_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/hpxopjvstzq3wzs/hic_chrXVI_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/tecg1g2su6jmuqg/hic_chrIX_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/prl5x0txu0etqq6/hic_chrXV_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/afcsi1ujnk5nysh/hic_chrIX_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/s76par7xwwqhgt5/hic_chrIII_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/t4q2zvkqzsf1w2z/hic_chrXIV_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/39f9bdeiioonv7h/hic_chrV_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/wgoyrqbd0s2wu0p/hic_chrII_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/ugu1jrdmwzq0xdd/hic_chrXII_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/z2oeoobfv9f1opp/hic_chrV_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/j8r1ejlaf25au5u/hic_chrII_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/dsgrd8u5gq9nu7d/hic_chrVI_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/wkx2553dygystgw/hic_chrI_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/bog6j92vpy7sf58/hic_chrXII_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/jvwpjzyghp0g9rp/hic_chrXIV_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/vcdjjhpb8gjpoyt/hic_chrX_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/n1frmyg6f8bhywt/hic_chrXV_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/4uo81qk7ploy64p/hic_chrXIII_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/2o8aowj6cshie8v/hic_chrII_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/i5lhdi6uwuuofqk/hic_chrXIV_chrVII_exp.json',
+'https://dl.dropboxusercontent.com/s/m0k2kgflrrpfems/hic_chrXVI_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/6gt584mhsagivqr/hic_chrIII_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/7kjch4y1lmvpqu6/hic_chrXII_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/oqedtozcgae39ij/hic_chrIX_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/mey2zlbkm4q824w/hic_chrX_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/2v31oo1dyp724s5/hic_chrVIII_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/5ps7m7fc43h7pve/hic_chrV_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/tvyx2z0p4nxf1t4/hic_chrIV_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/924rftr1kn0jkcl/hic_chrIV_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/xkcyz4wskgum6wt/hic_chrI_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/ufdguzu0q433dmh/hic_chrV_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/3ihtbf5pym05eqe/hic_chrI_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/f1kirzj23hz1m64/hic_chrIV_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/fa11990aimuvhty/hic_chrVII_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/6kuznxj1b28oooo/hic_chrVII_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/d5gtz0sboogjhf9/hic_chrXII_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/rps9g5iz3op8i0j/hic_chrIV_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/qzpsczd431yvdzp/hic_chrVIII_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/isrobzj7fsfxlql/hic_chrXII_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/ywhmt6l3oz1bnk1/hic_chrV_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/qpdnkb5dod7pnyx/hic_chrX_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/2v3ir5srza1axlm/hic_chrVIII_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/n34mp7jpou0nddr/hic_chrXIII_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/emr93v6digfyaqs/hic_chrV_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/9572y71t6k922n2/hic_chrVIII_chrXII_diff.json',
+'https://dl.dropboxusercontent.com/s/nj02a4ln0rz4noa/hic_chrX_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/4maeiutafoqc16y/hic_chrVII_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/swnwgmf235kb695/hic_chrVII_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/139igwh99gnszin/hic_chrXIV_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/e25uaox2aibk03d/hic_chrV_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/9838scrzmw7m589/hic_chrXIII_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/8rlk6wdvcsgi2m1/hic_chrXVI_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/iuse4vd2xtfqmin/hic_chrII_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/hhtc3c02duyfzrp/hic_chrXVI_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/hd6l7jyzifugrpu/hic_chrIII_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/ummg8vx7z2vwn7c/hic_chrXIV_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/8mf01fnvbaca4tq/hic_chrXIII_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/29ks7gp9goph71a/hic_chrII_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/o54uect0sa9i20c/hic_chrVI_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/mrvkq0sdytkvfkt/hic_chrXV_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/4mmbcz9y80swbzl/hic_chrX_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/nwhktmaa6itm5bd/hic_chrXIII_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/g6d9aqo3afinzxb/hic_chrXVI_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/3lun7fb0r4pujkk/hic_chrVII_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/bvhn96950zyqqpz/hic_chrII_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/yql2qqs6b8csuec/hic_chrXVI_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/ccofu1oyulvb74w/hic_chrIV_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/0m5pjj8erxme8o6/hic_chrXIV_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/5x820508x8i7ezq/hic_chrVI_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/zkm3ux0ossz83kt/hic_chrXIV_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/hl4cg6jd7l3faw2/hic_chrXV_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/80tlqx5ygmi7acn/hic_chrXII_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/595rwtswnnrnh2w/hic_chrXII_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/7wyt3zjicucqvh5/hic_chrV_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/llm4758fgifat93/hic_chrI_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/gzt4bvxgev4bu9t/hic_chrVI_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/ro323n9bnfqojfh/hic_chrIV_chrXIII_diff.json',
+'https://dl.dropboxusercontent.com/s/i30078sh0wvu3go/hic_chrXIV_chrIII_exp.json',
+'https://dl.dropboxusercontent.com/s/1h5hr6lp9hqdprw/hic_chrXI_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/c190abreh0u9fbg/hic_chrI_chrVIII_diff.json',
+'https://dl.dropboxusercontent.com/s/xbw4jwbsid2kctv/hic_chrXIII_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/g5hhbj48oqd5e73/hic_chrVIII_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/dhdou6857opwtlo/hic_chrII_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/yx9dxei7jjxzd7h/hic_chrII_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/5krass3r8jafamy/hic_chrXVI_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/qv3hvdqkc27irxm/hic_chrVI_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/z4lv22i6z54n1ze/hic_chrIV_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/oakawnagdex08qr/hic_chrXII_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/whutwhfvpqa4u3t/hic_chrV_chrXI_diff.json',
+'https://dl.dropboxusercontent.com/s/3aesvkcz5r1kxwp/hic_chrIII_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/3qtof7xa9bsynm8/hic_chrXV_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/x85gesbwosg3h93/hic_chrI_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/ubf8ruh14e927ra/hic_chrVI_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/dddv62ip718c8uv/hic_chrXIII_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/snio4z9a30javth/hic_chrI_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/9sz1kz2bglwxk6i/hic_chrXIII_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/1yteybniul8dj7u/hic_chrVI_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/t3dh6diaj94zcsx/hic_chrIII_chrVI_diff.json',
+'https://dl.dropboxusercontent.com/s/xlhhsz3gcr0h4wb/hic_chrV_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/axefacfjfhosflu/hic_chrXV_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/iopwjwk64mgb1n7/hic_chrX_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/a0v06gvzarca2y2/hic_chrXVI_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/lrj5alv81wpcrsy/hic_chrXII_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/vcgwbhb74hfjzj0/hic_chrVI_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/abizy5pwsp00x5t/hic_chrXIII_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/epmmglahlmap7hr/hic_chrIII_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/o7yxwpm2g5o1mkb/hic_chrI_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/kgm73nwtw6t1lse/hic_chrIV_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/mh26n7l1dygov9p/hic_chrXII_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/ovwu0b7pcn4vm6z/hic_chrVII_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/3ua2f5bvul4lh81/hic_chrI_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/z8z04bwukjky592/hic_chrXVI_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/bodq5rdd84iljth/hic_chrIII_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/kwv9orxak0e07d1/hic_chrVII_chrV_exp.json',
+'https://dl.dropboxusercontent.com/s/zsor2aw1yzskegh/hic_chrV_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/49qixsbfq2y4n61/hic_chrV_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/fbr5ebgxitmj2dw/hic_chrXI_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/d1cg53vm9r9vvyp/hic_chrIII_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/kgt4u8wnt52qj1q/hic_chrII_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/jcx06xsb33dyp5s/hic_chrVIII_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/srfetajf5618928/hic_chrXII_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/7i0a6c6s3qk2rvr/hic_chrXIV_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/1dh5tfivoawst03/hic_chrV_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/tfbjhuoom5fzko0/hic_chrV_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/wjbkwidtae3b58k/hic_chrV_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/50lmasoczqusz3q/hic_chrXI_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/iqozig2rxuy8aqj/hic_chrI_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/tzvf4cuq9ofnyml/hic_chrIV_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/pmuc32lb8ny6mht/hic_chrVIII_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/gzmhnd7ktszvfl9/hic_chrXII_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/3n1exge9iilndcf/hic_chrV_chrII_qui.json',
+'https://dl.dropboxusercontent.com/s/udder0m00hy65q0/hic_chrII_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/ov67rp2b2g8mcc6/hic_chrV_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/5n4id13djz3ic9b/hic_chrVI_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/ryw2134fhfkbu3q/hic_chrXIV_chrXVI_diff.json',
+'https://dl.dropboxusercontent.com/s/8zouznd1mq5j98a/hic_chrVI_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/zzqeds4mhh9p7h4/hic_chrV_chrIII_diff.json',
+'https://dl.dropboxusercontent.com/s/3urtqd6gkxfwqbl/hic_chrXV_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/no81lyzqck6480x/hic_chrXVI_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/4d0s1ysudhvm5ub/hic_chrIII_chrVII_qui.json',
+'https://dl.dropboxusercontent.com/s/jsxs0c4xm2vbhd2/hic_chrIX_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/l37z27lz65fdnel/hic_chrI_chrXI_exp.json',
+'https://dl.dropboxusercontent.com/s/lzs0ewnwrb6zxl2/hic_chrXVI_chrVIII_exp.json',
+'https://dl.dropboxusercontent.com/s/a4ougcgqxvt7msz/hic_chrI_chrXV_diff.json',
+'https://dl.dropboxusercontent.com/s/xxq2z6zbwq2qzvp/hic_chrXIV_chrXIII_exp.json',
+'https://dl.dropboxusercontent.com/s/7jihroqz30zep5c/hic_chrVII_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/jay6516j4r2hazx/hic_chrI_chrXIV_qui.json',
+'https://dl.dropboxusercontent.com/s/sfg1d60cju4pgvk/hic_chrXIV_chrXV_exp.json',
+'https://dl.dropboxusercontent.com/s/ebijwm22bz4qqed/hic_chrXIII_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/0xj25akiktf37qi/hic_chrXIV_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/c3kcunfhr5pds0f/hic_chrII_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/vabi8bxrnhjlgax/hic_chrV_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/27i10hri5nxtpg6/hic_chrX_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/xxlkgwx8mqq85o1/hic_chrXVI_chrVIII_qui.json',
+'https://dl.dropboxusercontent.com/s/c6hbhd9cn6chbnl/hic_chrXII_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/umld9tu33qc2cy5/hic_chrI_chrV_diff.json',
+'https://dl.dropboxusercontent.com/s/lr0dstgrnlxqm05/hic_chrXIII_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/p0m6o7seae13nuc/hic_chrVIII_chrXIII_qui.json',
+'https://dl.dropboxusercontent.com/s/k7nf3am45orn9ve/hic_chrXIII_chrXVI_qui.json',
+'https://dl.dropboxusercontent.com/s/c7h6t51t7im7osc/hic_chrXV_chrI_qui.json',
+'https://dl.dropboxusercontent.com/s/o7otqwvrqldwueh/hic_chrXVI_chrXVI_exp.json',
+'https://dl.dropboxusercontent.com/s/xast60e5637enaw/hic_chrXIII_chrX_diff.json',
+'https://dl.dropboxusercontent.com/s/08y8p49gziu9w4w/hic_chrVIII_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/5g7ocbvfy2ro0zy/hic_chrXII_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/08hy7n9jwv7r233/hic_chrIV_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/wp8hyvq356hp76d/hic_chrVII_chrVI_qui.json',
+'https://dl.dropboxusercontent.com/s/mdu50hx3kvkd8xy/hic_chrIII_chrV_qui.json',
+'https://dl.dropboxusercontent.com/s/nq5dlryyzptq4qz/hic_chrIX_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/0cxg5o2wxsfwipm/hic_chrX_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/y9oo7ewy69rpmtm/hic_chrI_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/dcx16gy6ywek1gs/hic_chrVIII_chrVI_exp.json',
+'https://dl.dropboxusercontent.com/s/1wwvb0ukucfb7ba/hic_chrVII_chrXIV_exp.json',
+'https://dl.dropboxusercontent.com/s/wtqg0ioi1jt22ks/hic_chrII_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/299pul2dxx8kyua/hic_chrXIV_chrIV_exp.json',
+'https://dl.dropboxusercontent.com/s/t2fjoaci3kr1yir/hic_chrXVI_chrXI_qui.json',
+'https://dl.dropboxusercontent.com/s/rr95h5rpb4t5su1/hic_chrII_chrI_exp.json',
+'https://dl.dropboxusercontent.com/s/3cqhs9w8fi2m0ea/hic_chrIII_chrIX_qui.json',
+'https://dl.dropboxusercontent.com/s/22wq4luh449wjtc/hic_chrIX_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/qniu5ezjfaz5403/hic_chrXII_chrXII_exp.json',
+'https://dl.dropboxusercontent.com/s/fn906is4bb9p07x/hic_chrV_chrI_diff.json',
+'https://dl.dropboxusercontent.com/s/od8qab8u5taolnw/hic_chrXI_chrIV_qui.json',
+'https://dl.dropboxusercontent.com/s/77wx3tuct1u14dq/hic_chrVII_chrXIV_diff.json',
+'https://dl.dropboxusercontent.com/s/66qsgx5dm0jm0rt/hic_chrXV_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/u57qlt2ytuicm9f/hic_chrVI_chrXV_qui.json',
+'https://dl.dropboxusercontent.com/s/n83oktj7e4t1f7g/hic_chrX_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/lopxp9rpz4fiust/hic_chrVIII_chrVII_diff.json',
+'https://dl.dropboxusercontent.com/s/sottp3vofnsh2r1/hic_chrIX_chrIII_qui.json',
+'https://dl.dropboxusercontent.com/s/zqxopo6hke7k7ph/hic_chrIII_chrX_exp.json',
+'https://dl.dropboxusercontent.com/s/b7d7081ofgc83zo/hic_chrVIII_chrIX_exp.json',
+'https://dl.dropboxusercontent.com/s/0nu8dvbc2au7d4w/hic_chrVII_chrIX_diff.json',
+'https://dl.dropboxusercontent.com/s/vaca53juq4oi7dl/hic_chrIX_chrII_exp.json',
+'https://dl.dropboxusercontent.com/s/9nsjkoretjjzhbs/hic_chrXV_chrXII_qui.json',
+'https://dl.dropboxusercontent.com/s/xulmkn9rzntttjs/hic_chrX_chrII_diff.json',
+'https://dl.dropboxusercontent.com/s/he4t9722qcx0vqu/hic_chrXII_chrIV_diff.json',
+'https://dl.dropboxusercontent.com/s/32xsd8wc0hxj4cv/hic_chrXI_chrX_qui.json',
+'https://dl.dropboxusercontent.com/s/lgpb8pn21bvqozk/hic_chrIV_chrXV_exp.json'];
+
+var margin = {top: 60, right: 40, bottom: 10, left: 80},
+    height = image_size - margin.top - margin.bottom*12,
+    width = height,
+    diff_url = "https://dl.dropboxusercontent.com/s/j47n3msc375fk8j/full_diff.png",
+    exp_url = "https://dl.dropboxusercontent.com/s/smj5pq8joiwn5ce/full_exp.png",
+    qui_url = "https://dl.dropboxusercontent.com/s/o7z3w31xi4eirf4/full_qui.png",
+    curr_url = diff_url,
+    exp_color = '#154b9b',
+    qui_color = '#ec4e16',
+    nan_color = '#d7d7d7',
+    curr_color = exp_color,
+    curr_sample = 'diff',
+    overview_check = 1,
+    zoom_level = 2,
+    chrom_names = ['chrI', 'chrII', 'chrIII', 'chrIV', 'chrV', 'chrVI', 'chrVII', 'chrVIII', 'chrIX', 'chrX', 'chrXI', 'chrXII', 'chrXIII', 'chrXIV', 'chrXV', 'chrXVI'],
+	chrom_pixels = [20, 68, 28, 128, 48, 25, 90, 47, 35, 63, 54, 84, 76, 67, 88, 77],
+	chrom_pixels_ticks = [10, 54, 102, 180, 268, 304, 362, 430, 471, 520, 579, 648, 728, 799, 877, 959]
+	chrom_total_len = 1000,
+	opacities = [],
+	curr_chrom_1 = 'chrI',
+	curr_chrom_2 = 'chrI';
+
+var x_overview = d3.scale.linear().domain([0,chrom_total_len]).range([0, width]);
+
+if(curr_sample == 'qui'){
+	curr_color = qui_color;
+	curr_url = qui_url;
+} else if(curr_sample == 'exp'){
+	curr_color = exp_color;
+	curr_url = exp_url;
+} else {
+	curr_url = diff_url;
+}
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .style("margin-left", -margin.left/margin.left + "px")
+    .attr("font-size", "14px")
+    .attr("font-family", "Tahoma")
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+
+function change_sample() {
+	if(overview_check == 1){
+		load_overview();
+	} else {
+		load_chroms();
+	}
+}
+
+function load_overview() {
+
+	console.log(curr_sample, 'overview')
+
+	change_sample_check = 0
+
+	width = height = Math.max(width, height);
+
+	curr_sample = document.getElementById('sample').value;
+	if(curr_sample == 'qui'){
+		curr_color = qui_color;
+		curr_url = qui_url;
+	} else if(curr_sample == 'exp'){
+		curr_color = exp_color;
+		curr_url = exp_url;
+	} else {
+		curr_url = diff_url;
+	}
+
+	d3.selectAll("rect, line, text, defs").remove()
+
+	svg.append("defs")
+	    .append("pattern")
+	    .attr("id", "overview")
+	    .attr('patternUnits', 'userSpaceOnUse')
+	    .attr("width", width)
+	    .attr("height", height)
+	    .append("image")
+	    .attr("xlink:href", curr_url)
+	    .attr("width", width)
+	    .attr("height", height);
+
+	svg.append("rect")
+	   .attr("x", 0)
+	   .attr("y", 0)
+	   .attr("width", width)
+	   .attr("height", height)
+	   .attr("fill", "url(#overview)");
+
+	var x_axis = d3.svg.axis()
+		.scale(x_overview)
+		.orient("top")
+		.tickValues(chrom_pixels_ticks)
+		.tickFormat(function(d, i) { return chrom_names[i].split("chr")[1]; })
+		.tickSize(10, 0, 0)
+
+	var y_axis = d3.svg.axis()
+		.scale(x_overview)
+		.orient("left")
+		.tickValues(chrom_pixels_ticks)
+		.tickFormat(function(d, i) { return chrom_names[i].split("chr")[1]; })
+		.tickSize(10, 0, 0)
+
+	svg.append("g")
+		.attr("class", "x axis")
+		.call(x_axis)
+		.selectAll("text")  
+        .style("text-anchor", "start")
+        .attr("dx", "-0.5em")
+        .attr("dy", "-0.4em")
+        .attr("font-weight", "bold")
+
+    svg.append("g")
+		.attr("class", "y axis")
+		.call(y_axis)
+		.selectAll("text")  
+        .style("text-anchor", "end")
+        .attr("dx", "-0.5em")
+        .attr("dy", "0.3em")
+        .attr("font-weight", "bold")
+
+	var prev_point_i = 1;
+
+	for(var i=0; i < chrom_pixels.length; i++){
+		var prev_point_j = 1;
+		for(var j=0; j < chrom_pixels.length; j++){
+			svg.append("rect")
+			   .attr("id", chrom_names[i]+"_"+chrom_names[j])
+			   .attr("x", prev_point_i)
+			   .attr("y", prev_point_j)
+			   .attr("width", Math.round(x_overview(chrom_pixels[i])))
+			   .attr("height", Math.round(x_overview(chrom_pixels[j])))
+			   .attr("fill", 'transparent')
+		       .attr('stroke', 'black')
+		       .attr('stroke-width', 0)
+		       .on("mouseover", function(d) {
+		       		// change stroke width of selected box
+			        d3.select(this).attr("stroke-width", 3);
+			        
+			        var x_val = Math.floor(parseFloat(d3.select(this).attr('x'))+d3.select(this).attr('width')/2);
+					var y_val = Math.floor(parseFloat(d3.select(this).attr('y'))+d3.select(this).attr('height')/2);
+
+					// Add red line to the y axis to mark where the mouse is 
+					svg.append("line")
+						.attr("id", "temp_line")
+						.attr("x1", 0)
+						.attr("x2", -15)
+						.attr("y1", y_val)
+						.attr("y2", y_val)
+						.style("stroke", "red")
+						.attr("stroke-width", 3)
+
+					// Add red line to the x axis to mark where the mouse is 
+					svg.append("line")
+						.attr("id", "temp_line")
+						.attr("x1", x_val)
+						.attr("x2", x_val)
+						.attr("y1", 0)
+						.attr("y2", -15)
+						.style("stroke", "red")
+						.attr("stroke-width", 3)
+
+			    })
+			    .on("mouseout", function() {
+			        // revert the stroke
+			        d3.select(this).attr("stroke-width", 0);
+			        d3.selectAll('#tooltip').remove();
+			        d3.selectAll('#temp_line').remove();
+			    })
+			    .on("click", function() {
+			    	var curr_chroms = d3.select(this)[0][0].id;
+			    	curr_chrom_1 = curr_chroms.split("_")[0];
+			    	curr_chrom_2 = curr_chroms.split("_")[1]
+			    	loading_text();
+			    	// document.getElementById('chrom1').value = curr_chrom_1;
+			    	// document.getElementById('chrom2').value = curr_chrom_2;
+			    	make_it_so(curr_chrom_1, curr_chrom_2, 1);
+			    });
+		    prev_point_j = prev_point_j + Math.round(x_overview(chrom_pixels[j]));
+		}
+		prev_point_i = prev_point_i + Math.round(x_overview(chrom_pixels[i]));
+	}
+	overview_check = 1;
+}
+
+document.getElementById('sample').value = 'diff';
+load_overview()
+
+var effective_dimension = Math.min(width, height);
+
+function loading_text() {
+	svg.append("text")
+	  .attr("id", "loading")
+      .attr("x", effective_dimension / 2)
+      .attr("y", effective_dimension / 2)
+      .attr("dy", ".32em")
+      .attr("text-anchor", "middle")
+      .text("Loading data...")
+      .attr("font-size", "6.5em")
+}
+
+d3.selectAll('#loadOverview').on('mousedown', load_overview)
+	.on('mouseup', function(){ d3.event.preventDefault(); })
+
+function load_chroms() {
+
+	console.log(curr_chrom_1+" "+curr_chrom_2)
+
+    loading_text();
+	make_it_so(curr_chrom_1, curr_chrom_2, 1);
+}
+
+d3.selectAll('#loadChroms').on('mousedown', load_chroms)
+	.on('mouseup', function(){ d3.event.preventDefault(); })
+
+function make_it_so(first_chr, second_chr, overview) {
+
+	curr_sample = document.getElementById('sample').value;
+	if(curr_sample == 'qui'){
+		curr_color = qui_color;
+		curr_url = qui_url;
+	} else if(curr_sample == 'exp'){
+		curr_color = exp_color;
+		curr_url = exp_url;
+	} else {
+		curr_url = diff_url;
+	}
+
+	overview_check = 0;
+
+	if(change_sample_check == 0){
+		zoom_level = 2;
+	}
+
+	change_sample_check = 1;
+
+	console.log(curr_sample, first_chr, second_chr)
+
+	for(var i = 0; i < dropbox_urls.length; i++){
+		temp_url = dropbox_urls[i].split('/')
+		temp_url = temp_url[temp_url.length-1]
+		temp_chrom_1 = temp_url.split('_')[1]
+		temp_chrom_2 = temp_url.split('_')[2]
+		temp_sample = temp_url.split('_')[3].split('.')[0]
+		if(temp_sample == curr_sample && temp_chrom_1 == first_chr && temp_chrom_2 == second_chr){
+			var dropbox_url = dropbox_urls[i]
+		}
+	}
+
+	console.log(dropbox_url)
+
+	// d3.json("../data/hic_"+first_chr+"_"+second_chr+"_"+curr_sample+".json", function(hic) {
+	d3.json(dropbox_url, function(hic) {
+
+		var matrix = [],
+			matrix_vals_reduced = [],
+			chroms = {"chrI": {"index": 0, "num_bins": 22}, "chrII": {"index": 1, "num_bins": 80}, "chrIII": {"index": 2, "num_bins": 32}, "chrIV": {"index": 3, "num_bins": 151}, "chrV": {"index": 4, "num_bins": 56}, "chrVI": {"index": 5, "num_bins": 27}, "chrVII": {"index": 6, "num_bins": 107}, "chrVIII": {"index": 7, "num_bins": 54}, "chrIX": {"index": 8, "num_bins": 40}, "chrX": {"index": 9, "num_bins": 73}, "chrXI": {"index": 10, "num_bins": 62}, "chrXII": {"index": 11, "num_bins": 99}, "chrXIII": {"index": 12, "num_bins": 90}, "chrXIV": {"index": 13, "num_bins": 77}, "chrXV": {"index": 14, "num_bins": 105}, "chrXVI": {"index": 15, "num_bins": 91}};
+			rows = hic.index,
+			cols = hic.columns,
+			values = hic.data,
+			n_rows = rows.length,
+			n_cols = cols.length,
+			temp_zoom_level = zoom_level,
+			end_coords_rows = [],
+			end_coords_cols = [],
+			cen_coords = [151466, 238206, 114385, 449712, 151987, 148509, 497034, 105708, 355629, 436426, 450000, 150946, 268034, 628755, 326699, 555957];
+
+		var cen_bin_1 = Math.round(cen_coords[chroms[first_chr].index]/10000);
+		var cen_bin_2 = Math.round(cen_coords[chroms[second_chr].index]/10000);
+
+		width = height = Math.max(width, height);
+
+		if(n_rows > n_cols){
+			width = Math.round(height/n_rows*n_cols)
+		} else if (n_cols > n_rows){
+			height = Math.round(width/n_cols*n_rows)
+		}
+
+		var y = d3.scale.ordinal().rangeBands([0, width]),
+		    x = d3.scale.ordinal().rangeBands([0, height]),
+			y2 = d3.scale.ordinal().rangeBands([0, width]),
+			x2 = d3.scale.ordinal().rangeBands([0, height]);
+
+		for(var i = 0; i < n_rows; i++){
+			end_coords_rows.push((i+1)*10000);
+			for(var j = 0; j < n_cols; j++){
+				var curr_z = values[i][j];
+				if(curr_z == 'nan'){
+					temp_curr_color = nan_color;
+					temp_curr_z = 1;
+				} else {
+					if(curr_z <= 0 && curr_sample == 'diff'){
+						curr_color = exp_color;
+						curr_z = Math.abs(curr_z)
+					} else if(curr_z > 0 && curr_sample == 'diff') {
+						curr_color = qui_color;
+					}
+					temp_curr_color = curr_color;
+					temp_curr_z = Number(curr_z).toFixed(8).replace(/\.?0+$/,"");
+					matrix_vals_reduced.push(temp_curr_z);
+				}
+				end_coords_cols.push((j+1)*10000);
+				matrix.push({x: i, xChr: first_chr, y: j, yChr: second_chr, z: temp_curr_z, color: temp_curr_color});
+			}
+		}
+
+		matrix_vals_reduced = matrix_vals_reduced.sort(),
+		max_val = Math.max.apply(Math, matrix_vals_reduced),
+
+		perc = 1;
+
+	  // Precompute the data scales.
+	  	current_scale = "linear";
+
+		function compute_scale(input_val){
+			var scale_val = input_val / 100;
+	  		var lower_bound = matrix_vals_reduced[Math.ceil(matrix_vals_reduced.length*scale_val)];
+	  		var upper_bound = matrix_vals_reduced[Math.floor(matrix_vals_reduced.length*(1-scale_val)-1)];
+	  		console.log(scale_val, lower_bound, upper_bound)
+  			return d3.scale.linear().domain([lower_bound,upper_bound]).clamp(true);
+		};
+
+		// The scales' domains.
+		x.domain(d3.range(n_rows));
+		y.domain(d3.range(n_cols));
+		x2.domain(end_coords_rows);
+		y2.domain(end_coords_cols);
+
+		// The default range.
+		z = compute_scale(zoom_level);
+
+		document.onkeydown = function(evt) {
+		    evt = evt || window.event;
+		    if (evt.keyCode == 33) {
+		        if (zoom_level >= 44){
+		        	zoom_level = 49;
+		        } else {
+		        	zoom_level += 5;
+		        }
+		        order(zoom_level);
+		    } else if (evt.keyCode == 34){
+		        if (zoom_level <= 5){
+		        	zoom_level = 0;
+		        } else {
+		        	zoom_level -= 5;
+		        }	
+		        order(zoom_level);
+		    } else if (evt.keyCode == 36){
+		        zoom_level = 0;
+		        order(zoom_level);
+		    } else if (evt.keyCode == 35){
+		        zoom_level = 49;
+		        order(zoom_level);
+		    }
+		};
+
+		// create the zoom listener
+		var zoom = d3.behavior.zoom()
+		  .on("zoom", rescale);
+
+		d3.selectAll("rect, line, text, defs").remove()
+
+		svg.append("rect")
+		  .attr("class", "background")
+		  .attr("width", width)
+		  .attr("height", height)
+		  .on('dblclick', load_overview)
+		  .call(zoom);
+
+		function getInterval(bleh){
+			if (bleh <= 75){
+				return 5;
+			} else if (bleh > 75){
+				return 10;
+			}
+		}
+
+		var x_interval = getInterval(n_rows)*10000,
+		    y_interval = getInterval(n_cols)*10000,
+			tickVals_rows = d3.range(0, Math.max.apply(Math, end_coords_rows), n_rows*10000 >= 750000 ? 100000 : 50000),
+			tickVals_cols = d3.range(0, Math.max.apply(Math, end_coords_cols), n_cols*10000 >= 750000 ? 100000 : 50000),
+			formatNum = d3.format("s");
+
+		var xTicks = d3.scale.ordinal()
+		                     .rangeBands([0,width])
+		                     .domain(tickVals_rows);
+
+		var yTicks = d3.scale.ordinal()
+		                     .rangeBands([0,height])
+		                     .domain(tickVals_cols);
+
+		var x_axis = d3.svg.axis()
+			.scale(x2)
+			.orient("top")
+			.tickFormat(function(d, i) { return d % x_interval === 0 || i == 0 ? formatNum(end_coords_rows[i])+"b" : null; })
+			.tickSize(10, 0, 0)
+
+		var y_axis = d3.svg.axis()
+			.scale(y2)
+			.orient("left")
+			.tickFormat(function(d, i) { return d % y_interval === 0 || i == 0 ? formatNum(end_coords_cols[i])+"b" : null; })
+			.tickSize(10, 0, 0)
+
+		svg.append("g")
+			.attr("class", "x axis")
+			.call(x_axis)
+			.selectAll("text")  
+            .style("text-anchor", "start")
+            .attr("dx", "-0.5em")
+            .attr("dy", "-0.4em")
+
+		svg.append("g")
+			.attr("class", "y axis")
+			.call(y_axis)
+			.selectAll("text")  
+			.style("text-anchor", "end")
+			.attr("dx", "-0.5em")
+			.attr("dy", "0.3em");
+
+		function button_zoom() {
+		    d3.event.preventDefault();
+		    var factor = (this.id === 'zoomIn') ? 1 : -1;
+		    if (zoom_level > 0 && factor < 0) {
+		    	zoom_level += factor;
+		    	order(zoom_level);
+		    } else if (zoom_level < 49 && factor > 0) {
+		    	zoom_level += factor;
+		    	order(zoom_level);
+		    }
+		}
+
+		d3.selectAll('#zoomIn, #zoomOut').on('mousedown', button_zoom)
+			.on('mouseup', function(){ d3.event.preventDefault(); })
+
+		var grid = svg.selectAll(".grid")
+			.data(matrix)
+		  	.enter().append("rect")
+		    .attr("class", "cell")
+		    .attr("x", function(d) { return x(d.x); })
+		    .attr("y", function(d) { return y(d.y); })
+		    .attr("width", x.rangeBand())
+		    .attr("height", y.rangeBand())
+		    .style("fill-opacity", function(d) { return z(d.z); })
+		    .style("fill", function(d) { return d.color })
+		    .on("mouseover", mouseover)
+		    .on("mouseout", mouseout)
+		    .on('dblclick', load_overview)
+		    .call(zoom)
+
+		svg.append("line")
+			.attr("x1", x(cen_bin_1-1))
+			.attr("x2", x(cen_bin_1))
+			.attr("y1", x(cen_bin_2-1))
+			.attr("y2", x(cen_bin_2-1))
+			.style("stroke", "black")
+			.attr("stroke-width", 1.5)
+
+		svg.append("line")
+			.attr("x1", x(cen_bin_1-1))
+			.attr("x2", x(cen_bin_1))
+			.attr("y1", x(cen_bin_2))
+			.attr("y2", x(cen_bin_2))
+			.style("stroke", "black")
+			.attr("stroke-width", 1.5)
+
+		svg.append("line")
+			.attr("x1", x(cen_bin_1-1))
+			.attr("x2", x(cen_bin_1-1))
+			.attr("y1", x(cen_bin_2))
+			.attr("y2", x(cen_bin_2-1))
+			.style("stroke", "black")
+			.attr("stroke-width", 1.5)
+
+		svg.append("line")
+			.attr("x1", x(cen_bin_1))
+			.attr("x2", x(cen_bin_1))
+			.attr("y1", x(cen_bin_2))
+			.attr("y2", x(cen_bin_2-1))
+			.style("stroke", "black")
+			.attr("stroke-width", 1.5)
+
+		function mouseover(p) {
+
+			var x_val = Math.round(parseFloat(d3.select(this).attr('x'))+x.rangeBand()/2);
+			var y_val = Math.round(parseFloat(d3.select(this).attr('y'))+y.rangeBand()/2);
+
+			// Add red line to the y axis to mark where the mouse is 
+			svg.append("line")
+				.attr("id", "temp_line")
+				.attr("x1", 0)
+				.attr("x2", -15)
+				.attr("y1", y_val)
+				.attr("y2", y_val)
+				.style("stroke", "red")
+				.attr("stroke-width", 3)
+
+			// Add red line to the x axis to mark where the mouse is 
+			svg.append("line")
+				.attr("id", "temp_line")
+				.attr("x1", x_val)
+				.attr("x2", x_val)
+				.attr("y1", 0)
+				.attr("y2", -15)
+				.style("stroke", "red")
+				.attr("stroke-width", 3)
+		}
+
+		function mouseout() {
+			d3.selectAll("#temp_line").remove();	
+			d3.selectAll("#tooltip").remove();							
+		}
+
+		function order() {
+			z = compute_scale(zoom_level);
+			svg.selectAll(".cell").style("fill-opacity", function(d) { return z(d.z); })
+		}
+
+		// function for handling zoom event
+		function rescale() {
+			if (d3.event.scale > temp_zoom_level && zoom_level < 49) {
+				zoom_level += 1;
+				temp_zoom_level = d3.event.scale
+				order();
+			} else if (d3.event.scale < temp_zoom_level && zoom_level > 0){
+				zoom_level -= 1;
+				temp_zoom_level = d3.event.scale
+				order();
+			}
+			temp_zoom_level = d3.event.scale
+		}
+
+		svg.select("#loading").remove();
+		
+	});
+};
+
+</script>
+
+<div>
+	<img src="https://dl.dropboxusercontent.com/s/eob5hrlajg2tr16/legend.png" width="10%">
+</div>
+
+</body>
+</html>
